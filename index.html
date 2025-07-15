@@ -1,0 +1,1546 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Modern Video Player</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        /* Custom Context Menu */
+        .custom-context-menu {
+            display: none;
+            position: fixed;
+            background: var(--card-bg);
+            border-radius: 5px;
+            padding: 5px 0;
+            box-shadow: var(--shadow);
+            z-index: 1000;
+        }
+
+        .context-menu-item {
+            padding: 8px 15px;
+            cursor: pointer;
+            color: var(--text-color);
+            transition: all 0.3s ease;
+        }
+
+        .context-menu-item:hover {
+            background: var(--primary-color);
+            color: white;
+        }
+
+        /* Volume Tooltip */
+        .volume-tooltip {
+            position: absolute;
+            background: rgba(0, 0, 0, 0.7);
+            color: white;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+            display: none;
+        }
+
+        /* Seekbar Tooltip */
+        .seekbar-tooltip {
+            position: absolute;
+            background: rgba(0, 0, 0, 0.7);
+            color: white;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+            display: none;
+            pointer-events: none;
+        }
+
+        :root {
+            --primary-color: #6c5ce7;
+            --secondary-color: #a29bfe;
+            --bg-color: #f5f6fa;
+            --text-color: #2d3436;
+            --card-bg: rgba(255, 255, 255, 0.9);
+            --shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+            --control-size: clamp(2.5rem, 4vw, 3rem);
+            --font-size-base: clamp(0.875rem, 2vw, 1rem);
+            --spacing-base: clamp(0.5rem, 2vw, 1rem);
+        }
+
+        .dark-mode {
+            --bg-color: #1e272e;
+            --text-color: #f5f6fa;
+            --card-bg: rgba(44, 62, 80, 0.9);
+            --shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', sans-serif;
+            background: var(--bg-color);
+            color: var(--text-color);
+            transition: all 0.3s ease;
+            font-size: var(--font-size-base);
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        .container {
+            width: min(100% - 2rem, 1200px);
+            margin-inline: auto;
+            padding: var(--spacing-base);
+        }
+
+        .tabs {
+            display: flex;
+            justify-content: center;
+            gap: var(--spacing-base);
+            margin-bottom: 1.5rem;
+            background: var(--card-bg);
+            padding: var(--spacing-base);
+            border-radius: 0.75rem;
+            box-shadow: var(--shadow);
+            flex-wrap: wrap;
+        }
+
+        .tab-btn {
+            padding: var(--spacing-base) calc(var(--spacing-base) * 2);
+            min-height: var(--control-size);
+            min-width: var(--control-size);
+            border: none;
+            background: transparent;
+            color: var(--text-color);
+            cursor: pointer;
+            font-size: var(--font-size-base);
+            border-radius: 0.5rem;
+            transition: all 0.3s ease;
+            touch-action: manipulation;
+        }
+
+        .video-container {
+            width: 100%;
+            max-width: min(100vw - 2rem, 1200px);
+            margin: 0 auto;
+            position: relative;
+        }
+
+        .video-player {
+            width: 100%;
+            height: 100%;
+            border-radius: 0.625rem;
+            background: #000;
+            object-fit: contain;
+        }
+
+        .video-controls {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background: rgba(0, 0, 0, 0.7);
+            padding: var(--spacing-base);
+            border-radius: 0 0 0.625rem 0.625rem;
+            display: flex;
+            align-items: center;
+            gap: var(--spacing-base);
+            flex-wrap: wrap;
+            backdrop-filter: blur(8px);
+        }
+
+        .control-btn {
+            min-height: var(--control-size);
+            min-width: var(--control-size);
+            background: transparent;
+            border: none;
+            color: white;
+            cursor: pointer;
+            padding: calc(var(--spacing-base) * 0.5);
+            font-size: calc(var(--font-size-base) * 1.2);
+            border-radius: 50%;
+            transition: background-color 0.3s ease;
+            touch-action: manipulation;
+        }
+
+        .control-btn:hover,
+        .control-btn:focus {
+            background-color: rgba(255, 255, 255, 0.1);
+        }
+
+        @media (max-width: 48em) { /* 768px */
+            .tabs {
+                position: fixed;
+                bottom: 0;
+                left: 0;
+                right: 0;
+                margin: 0;
+                border-radius: 1rem 1rem 0 0;
+                padding: calc(var(--spacing-base) * 0.75);
+                z-index: 1000;
+            }
+
+            .tab-btn {
+                flex: 1;
+                text-align: center;
+                white-space: nowrap;
+                padding: calc(var(--spacing-base) * 0.75);
+            }
+
+            .container {
+                padding-bottom: calc(var(--control-size) * 2);
+            }
+
+            .video-controls {
+                padding: calc(var(--spacing-base) * 0.75);
+            }
+        }
+
+        @media (min-width: 48.1em) { /* >768px */
+            .tabs {
+                flex-direction: row;
+            }
+
+            .video-controls {
+                opacity: 0;
+                transition: opacity 0.3s ease;
+            }
+
+            .video-container:hover .video-controls,
+            .video-container:focus-within .video-controls {
+                opacity: 1;
+            }
+        }
+
+        @media (min-width: 64em) { /* 1024px */
+            :root {
+                --control-size: 3rem;
+                --font-size-base: 1rem;
+                --spacing-base: 1rem;
+            }
+        }
+
+        @media (display-mode: fullscreen) {
+            .video-controls {
+                padding: calc(var(--spacing-base) * 2);
+            }
+
+            .control-btn {
+                --control-size: clamp(3rem, 6vw, 4rem);
+            }
+        }
+
+        .tab-btn:hover {
+            background: var(--primary-color);
+            color: white;
+        }
+
+        .tab-btn.active {
+            background: var(--primary-color);
+            color: white;
+        }
+
+        /* Tab Content */
+        .tab-content {
+            display: none;
+            background: var(--card-bg);
+            padding: 20px;
+            border-radius: 15px;
+            box-shadow: var(--shadow);
+        }
+
+        .tab-content.active {
+            display: block;
+        }
+
+        /* Video Player */
+        .video-container {
+            width: 100%;
+            max-width: 1000px;
+            margin: 0 auto;
+            position: relative;
+        }
+
+        .video-player {
+            width: 100%;
+            border-radius: 10px;
+            background: #000;
+        }
+
+        .video-controls {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background: rgba(0, 0, 0, 0.7);
+            padding: 10px;
+            border-radius: 0 0 10px 10px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .control-btn {
+            background: transparent;
+            border: none;
+            color: white;
+            cursor: pointer;
+            padding: 5px;
+            font-size: 16px;
+        }
+
+        .seekbar {
+            flex-grow: 1;
+            height: 5px;
+            background: rgba(255, 255, 255, 0.3);
+            cursor: pointer;
+            border-radius: 5px;
+        }
+
+        .seekbar-fill {
+            height: 100%;
+            background: var(--primary-color);
+            width: 0;
+            border-radius: 5px;
+        }
+
+        /* Links Tab */
+        .links-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+            gap: 20px;
+        }
+
+        .link-card {
+            background: var(--card-bg);
+            padding: 15px;
+            border-radius: 10px;
+            box-shadow: var(--shadow);
+        }
+
+        .link-card h3 {
+            margin-bottom: 10px;
+            color: var(--primary-color);
+        }
+
+        .link-preview {
+            word-break: break-all;
+            margin-bottom: 10px;
+            font-size: 14px;
+        }
+
+        .card-buttons {
+            display: flex;
+            gap: 10px;
+        }
+
+        .card-btn {
+            padding: 8px 15px;
+            border: none;
+            border-radius: 5px;
+            background: var(--primary-color);
+            color: white;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .card-btn:hover {
+            background: var(--secondary-color);
+        }
+
+        /* Admin Tab */
+        .admin-form {
+            max-width: 500px;
+            margin: 0 auto;
+        }
+
+        .form-group {
+            margin-bottom: 15px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 5px;
+        }
+
+        .form-group input {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid var(--secondary-color);
+            border-radius: 5px;
+            background: var(--bg-color);
+            color: var(--text-color);
+        }
+
+        /* Settings Tab */
+        .settings-container {
+            max-width: 500px;
+            margin: 0 auto;
+        }
+
+        .setting-item {
+            margin-bottom: 20px;
+        }
+
+        .setting-item label {
+            display: block;
+            margin-bottom: 10px;
+        }
+
+        .toggle-switch {
+            position: relative;
+            display: inline-block;
+            width: 60px;
+            height: 34px;
+        }
+
+        .toggle-switch input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+
+        .slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: #ccc;
+            transition: .4s;
+            border-radius: 34px;
+        }
+
+        .slider:before {
+            position: absolute;
+            content: "";
+            height: 26px;
+            width: 26px;
+            left: 4px;
+            bottom: 4px;
+            background-color: white;
+            transition: .4s;
+            border-radius: 50%;
+        }
+
+        input:checked + .slider {
+            background-color: var(--primary-color);
+        }
+
+        input:checked + .slider:before {
+            transform: translateX(26px);
+        }
+
+        @media (max-width: 768px) {
+            .tabs {
+                flex-direction: column;
+                gap: 10px;
+            }
+
+            .video-controls {
+                flex-wrap: wrap;
+            }
+
+            .links-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="tabs">
+            <button class="tab-btn active" data-tab="player">Video Player</button>
+            <button class="tab-btn" data-tab="links">Links</button>
+            <button class="tab-btn" data-tab="history">History</button>
+            <button class="tab-btn" data-tab="watchlist">Watchlist</button>
+            <button class="tab-btn" data-tab="admin">Admin</button>
+            <button class="tab-btn" data-tab="settings">Settings</button>
+        </div>
+
+        <div id="player" class="tab-content active">
+            <div class="paste-link-container" style="margin-bottom: 20px;">
+                <input type="text" id="pasteLink" placeholder="Paste video/audio URL here" style="padding: 8px; width: 80%; margin-right: 10px; border: 1px solid var(--secondary-color); border-radius: 5px; background: var(--bg-color); color: var(--text-color);">
+                <button class="card-btn" id="playNowBtn">Play Now</button>
+                <div id="currentFileInfo" style="margin-top: 10px; font-size: 14px;"></div>
+            </div>
+            <div class="video-container">
+                <video class="video-player" id="videoPlayer">
+                    Your browser does not support the video tag.
+                </video>
+                <div class="video-controls">
+                    <button class="control-btn" id="playPauseBtn">
+                        <i class="fas fa-play"></i>
+                    </button>
+                    <div class="seekbar" id="seekbar">
+                        <div class="seekbar-fill"></div>
+                    </div>
+                    <span id="currentTime">00:00:00</span>
+                    <span>/</span>
+                    <span id="duration">00:00:00</span>
+                    <button class="control-btn" id="volumeBtn">
+                        <i class="fas fa-volume-up"></i>
+                    </button>
+                    <input type="range" id="volumeSlider" min="0" max="1" step="0.1" value="1" style="width: 100px;">
+                    <select id="playbackSpeed" class="control-btn">
+                        <option value="0.5">0.5x</option>
+                        <option value="1" selected>1x</option>
+                        <option value="1.5">1.5x</option>
+                        <option value="2">2x</option>
+                    </select>
+                    <button class="control-btn" id="addNoteBtn" title="Add Note">
+                        <i class="fas fa-sticky-note"></i>
+                    </button>
+                    <button class="control-btn" id="pipBtn" title="Picture in Picture">
+                        <i class="fas fa-external-link-alt"></i>
+                    </button>
+                    <button class="control-btn" id="fullscreenBtn">
+                        <i class="fas fa-expand"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <div id="links" class="tab-content">
+            <div class="links-grid" id="linksGrid"></div>
+        </div>
+
+        <div id="admin" class="tab-content">
+            <div class="admin-form">
+                <div id="loginForm">
+                    <div class="form-group">
+                        <label for="password">Admin Password</label>
+                        <input type="password" id="password" placeholder="Enter password">
+                        <div style="margin-top: 10px;">
+                            <label class="toggle-switch" style="display: inline-flex; align-items: center;">
+                                <input type="checkbox" id="showPasswordToggle">
+                                <span class="slider"></span>
+                                <span style="margin-left: 10px;">Show Password</span>
+                            </label>
+                        </div>
+                    </div>
+                    <button class="card-btn" id="loginBtn">Login</button>
+                </div>
+                <div id="adminPanel" style="display: none;">
+                    <div class="form-group">
+                        <label for="movieName">Movie Name</label>
+                        <input type="text" id="movieName" placeholder="Enter movie name">
+                    </div>
+                    <div class="form-group">
+                        <label for="videoLink">Video Link</label>
+                        <input type="text" id="videoLink" placeholder="Enter video link">
+                    </div>
+                    <div class="form-group" style="display: flex; gap: 10px;">
+                        <button class="card-btn" id="addLinkBtn">Add Link</button>
+                        <button class="card-btn" id="deleteAllLinksBtn">Delete All</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div id="history" class="tab-content">
+            <div class="history-grid" id="historyGrid"></div>
+        </div>
+
+        <div id="watchlist" class="tab-content">
+            <div class="watchlist-grid" id="watchlistGrid"></div>
+        </div>
+
+        <div id="settings" class="tab-content">
+            <div class="settings-container">
+                <div class="setting-item">
+                    <label>Dark Mode</label>
+                    <label class="toggle-switch">
+                        <input type="checkbox" id="darkModeToggle">
+                        <span class="slider"></span>
+                    </label>
+                </div>
+                <div class="setting-item">
+                    <label for="defaultVolume">Default Volume</label>
+                    <input type="range" id="defaultVolume" min="0" max="1" step="0.1" value="1">
+                    <span id="volumeValue">100%</span>
+                </div>
+                <div class="setting-item">
+                    <label for="defaultSpeed">Default Playback Speed</label>
+                    <select id="defaultSpeed">
+                        <option value="0.5">0.5x</option>
+                        <option value="1" selected>1x</option>
+                        <option value="1.25">1.25x</option>
+                        <option value="1.5">1.5x</option>
+                        <option value="2">2x</option>
+                    </select>
+                </div>
+                <div class="setting-item">
+                    <label>Autoplay</label>
+                    <label class="toggle-switch">
+                        <input type="checkbox" id="autoplayToggle">
+                        <span class="slider"></span>
+                    </label>
+                </div>
+                <div class="setting-item">
+                    <button class="card-btn" id="exportLinksBtn">Export Links</button>
+                    <input type="file" id="importLinksInput" accept=".json" style="display: none;">
+                    <button class="card-btn" id="importLinksBtn">Import Links</button>
+                </div>
+                <div class="setting-item">
+                    <button class="card-btn" id="resetAllBtn">Reset All Settings</button>
+                </div>
+                <div class="setting-item">
+                    <button class="card-btn" id="clearLinksBtn">Clear All Links</button>
+                </div>
+                <div class="setting-item">
+                    <button class="card-btn" id="changePasswordBtn">Change Admin Password</button>
+                </div>
+                <div class="profile-section" style="margin-top: 30px; padding: 20px; background: var(--card-bg); border-radius: 10px; box-shadow: var(--shadow);">
+                    <h2 style="margin-bottom: 20px; color: var(--primary-color);">Profile Management</h2>
+                    <div class="profile-form" style="margin-bottom: 20px;">
+                        <input type="text" id="profileName" placeholder="Profile Name" style="padding: 8px; margin-right: 10px; border: 1px solid var(--secondary-color); border-radius: 5px; background: var(--bg-color); color: var(--text-color);">
+                        <input type="text" id="profileAvatar" placeholder="Avatar URL" style="padding: 8px; margin-right: 10px; border: 1px solid var(--secondary-color); border-radius: 5px; background: var(--bg-color); color: var(--text-color);">
+                        <button class="card-btn" id="addProfileBtn">Add Profile</button>
+                    </div>
+                    <div id="profilesList" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 20px;"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Custom Context Menu -->
+    <div class="custom-context-menu" id="videoContextMenu">
+        <div class="context-menu-item" id="copyCurrentLink">Copy Current Link</div>
+        <div class="context-menu-item" id="showCurrentTime">Show Current Time</div>
+        <div class="context-menu-item" id="downloadVideo">Download Video</div>
+    </div>
+
+    <script>
+        // Initialize variables
+        let currentTab = 'player';
+        let isAdmin = false;
+        let links = [];
+        let controlsTimeout;
+        let isFullscreen = false;
+        let watchHistory = [];
+        let watchLater = [];
+        let watchLaterNotification = null;
+        let profiles = [];
+        let currentProfile = null;
+        const defaultPassword = '123456';
+
+        // DOM Elements
+        const videoPlayer = document.getElementById('videoPlayer');
+        const playPauseBtn = document.getElementById('playPauseBtn');
+        const seekbar = document.getElementById('seekbar');
+        const seekbarFill = seekbar.querySelector('.seekbar-fill');
+        const currentTimeDisplay = document.getElementById('currentTime');
+        const durationDisplay = document.getElementById('duration');
+        const volumeBtn = document.getElementById('volumeBtn');
+        const volumeSlider = document.getElementById('volumeSlider');
+        const playbackSpeed = document.getElementById('playbackSpeed');
+        const fullscreenBtn = document.getElementById('fullscreenBtn');
+        const pipBtn = document.getElementById('pipBtn');
+        const linksGrid = document.getElementById('linksGrid');
+        const loginForm = document.getElementById('loginForm');
+        const adminPanel = document.getElementById('adminPanel');
+        const darkModeToggle = document.getElementById('darkModeToggle');
+
+        // Load saved data
+        function loadSavedData() {
+            const savedLinks = localStorage.getItem('videoLinks');
+            if (savedLinks) links = JSON.parse(savedLinks);
+
+            const savedHistory = localStorage.getItem('watchHistory');
+            if (savedHistory) watchHistory = JSON.parse(savedHistory);
+
+            const savedWatchLater = localStorage.getItem('watchLater');
+            if (savedWatchLater) watchLater = JSON.parse(savedWatchLater);
+
+            const savedProfiles = localStorage.getItem('profiles');
+            if (savedProfiles) {
+                profiles = JSON.parse(savedProfiles);
+                const lastProfile = localStorage.getItem('currentProfile');
+                if (lastProfile) {
+                    currentProfile = profiles.find(p => p.name === lastProfile);
+                    if (currentProfile) {
+                        applyProfileSettings(currentProfile);
+                    }
+                }
+            }
+
+            // Request notification permission
+            if (Notification.permission !== 'granted' && Notification.permission !== 'denied') {
+                Notification.requestPermission();
+            }
+
+            const savedPassword = localStorage.getItem('adminPassword');
+            if (!savedPassword) localStorage.setItem('adminPassword', defaultPassword);
+
+            const savedDarkMode = localStorage.getItem('darkMode') === 'true';
+            if (savedDarkMode) {
+                document.body.classList.add('dark-mode');
+                darkModeToggle.checked = true;
+            }
+
+            const savedVolume = localStorage.getItem('defaultVolume');
+            if (savedVolume) {
+                videoPlayer.volume = parseFloat(savedVolume);
+                volumeSlider.value = savedVolume;
+            }
+
+            const savedSpeed = localStorage.getItem('defaultSpeed');
+            if (savedSpeed) {
+                videoPlayer.playbackRate = parseFloat(savedSpeed);
+                playbackSpeed.value = savedSpeed;
+            }
+
+            updateLinksGrid();
+        }
+
+        // Tab switching
+        document.querySelectorAll('.tab-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                document.querySelector(`.tab-btn.active`).classList.remove('active');
+                btn.classList.add('active');
+                document.querySelector(`.tab-content.active`).classList.remove('active');
+                document.getElementById(btn.dataset.tab).classList.add('active');
+                currentTab = btn.dataset.tab;
+            });
+        });
+
+        // Custom context menu
+        const videoContextMenu = document.getElementById('videoContextMenu');
+        const volumeTooltip = document.createElement('div');
+        volumeTooltip.className = 'volume-tooltip';
+        document.querySelector('.video-controls').appendChild(volumeTooltip);
+
+        const seekbarTooltip = document.createElement('div');
+        seekbarTooltip.className = 'seekbar-tooltip';
+        seekbar.appendChild(seekbarTooltip);
+
+        // Prevent default context menu and show custom menu
+        videoPlayer.addEventListener('contextmenu', (e) => {
+            e.preventDefault();
+            videoContextMenu.style.display = 'block';
+            videoContextMenu.style.left = e.pageX + 'px';
+            videoContextMenu.style.top = e.pageY + 'px';
+        });
+
+        // Hide context menu when clicking outside
+        document.addEventListener('click', (e) => {
+            if (!videoContextMenu.contains(e.target)) {
+                videoContextMenu.style.display = 'none';
+            }
+        });
+
+        // Context menu actions
+        document.getElementById('copyCurrentLink').addEventListener('click', () => {
+            navigator.clipboard.writeText(videoPlayer.src)
+                .then(() => alert('Video link copied to clipboard!'));
+            videoContextMenu.style.display = 'none';
+        });
+
+        document.getElementById('showCurrentTime').addEventListener('click', () => {
+            alert(`Current time: ${formatTime(videoPlayer.currentTime)}`);
+            videoContextMenu.style.display = 'none';
+        });
+
+        document.getElementById('downloadVideo').addEventListener('click', () => {
+            if (videoPlayer.src.startsWith('blob:') || !videoPlayer.src) {
+                alert('Download not available for this video');
+            } else {
+                const a = document.createElement('a');
+                a.href = videoPlayer.src;
+                a.download = '';
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+            }
+            videoContextMenu.style.display = 'none';
+        });
+
+        // Volume tooltip
+        volumeSlider.addEventListener('mousemove', (e) => {
+            const rect = volumeSlider.getBoundingClientRect();
+            volumeTooltip.style.display = 'block';
+            volumeTooltip.style.left = (e.clientX - rect.left) + 'px';
+            volumeTooltip.style.top = '-25px';
+            volumeTooltip.textContent = Math.round(volumeSlider.value * 100) + '%';
+        });
+
+        volumeSlider.addEventListener('mouseout', () => {
+            volumeTooltip.style.display = 'none';
+        });
+
+        // Seekbar tooltip
+        seekbar.addEventListener('mousemove', (e) => {
+            const rect = seekbar.getBoundingClientRect();
+            const percent = (e.clientX - rect.left) / rect.width;
+            const time = percent * videoPlayer.duration;
+            
+            seekbarTooltip.style.display = 'block';
+            seekbarTooltip.style.left = (e.clientX - rect.left) + 'px';
+            seekbarTooltip.style.top = '-25px';
+            seekbarTooltip.textContent = formatTime(time);
+        });
+
+        seekbar.addEventListener('mouseout', () => {
+            seekbarTooltip.style.display = 'none';
+        });
+
+        // Video player controls
+        playPauseBtn.addEventListener('click', () => {
+            if (videoPlayer.paused) {
+                videoPlayer.play();
+                playPauseBtn.innerHTML = '<i class="fas fa-pause"></i>';
+            } else {
+                videoPlayer.pause();
+                playPauseBtn.innerHTML = '<i class="fas fa-play"></i>';
+            }
+        });
+
+        seekbar.addEventListener('click', (e) => {
+            const percent = (e.offsetX / seekbar.offsetWidth);
+            videoPlayer.currentTime = percent * videoPlayer.duration;
+        });
+
+        videoPlayer.addEventListener('timeupdate', () => {
+            const percent = (videoPlayer.currentTime / videoPlayer.duration) * 100;
+            seekbarFill.style.width = `${percent}%`;
+            currentTimeDisplay.textContent = formatTime(videoPlayer.currentTime);
+        });
+
+        videoPlayer.addEventListener('loadedmetadata', () => {
+            durationDisplay.textContent = formatTime(videoPlayer.duration);
+        });
+
+        volumeBtn.addEventListener('click', () => {
+            videoPlayer.muted = !videoPlayer.muted;
+            volumeBtn.innerHTML = videoPlayer.muted ? 
+                '<i class="fas fa-volume-mute"></i>' : 
+                '<i class="fas fa-volume-up"></i>';
+        });
+
+        volumeSlider.addEventListener('input', (e) => {
+            videoPlayer.volume = e.target.value;
+            localStorage.setItem('defaultVolume', e.target.value);
+        });
+
+        playbackSpeed.addEventListener('change', (e) => {
+            videoPlayer.playbackRate = parseFloat(e.target.value);
+            localStorage.setItem('defaultSpeed', e.target.value);
+        });
+
+        fullscreenBtn.addEventListener('click', () => {
+            if (document.fullscreenElement) {
+                document.exitFullscreen();
+                fullscreenBtn.innerHTML = '<i class="fas fa-expand"></i>';
+            } else {
+                videoPlayer.requestFullscreen();
+                fullscreenBtn.innerHTML = '<i class="fas fa-compress"></i>';
+            }
+        });
+
+        // Links management
+        function updateLinksGrid() {
+            linksGrid.innerHTML = '';
+            links.forEach((link, index) => {
+                const card = document.createElement('div');
+                card.className = 'link-card';
+                card.innerHTML = `
+                    <h3>${link.name}</h3>
+                    <div class="link-preview">${link.url}</div>
+                    <div class="card-buttons">
+                        <button class="card-btn" onclick="copyLink(${index})">
+                            <i class="fas fa-copy"></i> Copy Link
+                        </button>
+                        <button class="card-btn" onclick="playVideo(${index})">
+                            <i class="fas fa-play"></i> Play
+                        </button>
+                        <button class="card-btn" onclick="scheduleWatch(${index})">
+                            <i class="fas fa-clock"></i> Watch Later
+                        </button>
+                        ${isAdmin ? `
+                            <button class="card-btn" onclick="deleteLink(${index})">
+                                <i class="fas fa-trash"></i>
+                            </button>
+                        ` : ''}
+                    </div>
+                `;
+                linksGrid.appendChild(card);
+            });
+        }
+
+        function copyLink(index) {
+            navigator.clipboard.writeText(links[index].url)
+                .then(() => alert('Link copied to clipboard!'));
+        }
+
+        function playVideo(index) {
+            videoPlayer.src = links[index].url;
+            videoPlayer.play();
+            document.querySelector('[data-tab="player"]').click();
+        }
+
+        function deleteLink(index) {
+            if (confirm('Are you sure you want to delete this link?')) {
+                links.splice(index, 1);
+                localStorage.setItem('videoLinks', JSON.stringify(links));
+                updateLinksGrid();
+            }
+        }
+
+        // Admin functionality
+        const showPasswordToggle = document.getElementById('showPasswordToggle');
+        const passwordInput = document.getElementById('password');
+        const deleteAllLinksBtn = document.getElementById('deleteAllLinksBtn');
+
+        showPasswordToggle.addEventListener('change', (e) => {
+            passwordInput.type = e.target.checked ? 'text' : 'password';
+        });
+
+        deleteAllLinksBtn.addEventListener('click', () => {
+            if (confirm('Are you sure you want to delete all links? This action cannot be undone.')) {
+                links = [];
+                localStorage.setItem('videoLinks', JSON.stringify(links));
+                updateLinksGrid();
+                alert('All links have been deleted!');
+            }
+        });
+
+        document.getElementById('loginBtn').addEventListener('click', () => {
+            const password = document.getElementById('password').value;
+            const savedPassword = localStorage.getItem('adminPassword');
+            if (password === savedPassword) {
+                isAdmin = true;
+                loginForm.style.display = 'none';
+                adminPanel.style.display = 'block';
+                updateLinksGrid();
+            } else {
+                alert('Incorrect password!');
+            }
+        });
+
+        document.getElementById('addLinkBtn').addEventListener('click', () => {
+            const name = document.getElementById('movieName').value;
+            const url = document.getElementById('videoLink').value;
+            if (name && url) {
+                links.push({ name, url });
+                localStorage.setItem('videoLinks', JSON.stringify(links));
+                updateLinksGrid();
+                document.getElementById('movieName').value = '';
+                document.getElementById('videoLink').value = '';
+            }
+        });
+
+        // Settings functionality
+        const defaultVolume = document.getElementById('defaultVolume');
+        const volumeValue = document.getElementById('volumeValue');
+        const defaultSpeed = document.getElementById('defaultSpeed');
+        const autoplayToggle = document.getElementById('autoplayToggle');
+        const exportLinksBtn = document.getElementById('exportLinksBtn');
+        const importLinksBtn = document.getElementById('importLinksBtn');
+        const importLinksInput = document.getElementById('importLinksInput');
+        const resetAllBtn = document.getElementById('resetAllBtn');
+
+        // Load additional settings
+        const loadAdditionalSettings = () => {
+            const savedAutoplay = localStorage.getItem('autoplay') === 'true';
+            autoplayToggle.checked = savedAutoplay;
+
+            // Update volume display
+            volumeValue.textContent = Math.round(defaultVolume.value * 100) + '%';
+        };
+
+        darkModeToggle.addEventListener('change', (e) => {
+            document.body.classList.toggle('dark-mode', e.target.checked);
+            localStorage.setItem('darkMode', e.target.checked);
+        });
+
+        defaultVolume.addEventListener('input', (e) => {
+            volumeValue.textContent = Math.round(e.target.value * 100) + '%';
+            videoPlayer.volume = e.target.value;
+            localStorage.setItem('defaultVolume', e.target.value);
+        });
+
+        defaultSpeed.addEventListener('change', (e) => {
+            videoPlayer.playbackRate = parseFloat(e.target.value);
+            localStorage.setItem('defaultSpeed', e.target.value);
+        });
+
+        autoplayToggle.addEventListener('change', (e) => {
+            localStorage.setItem('autoplay', e.target.checked);
+        });
+
+        exportLinksBtn.addEventListener('click', () => {
+            const data = {
+                links: links,
+                settings: {
+                    darkMode: darkModeToggle.checked,
+                    defaultVolume: defaultVolume.value,
+                    defaultSpeed: defaultSpeed.value,
+                    autoplay: autoplayToggle.checked
+                }
+            };
+            const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'video_player_data.json';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        });
+
+        importLinksBtn.addEventListener('click', () => {
+            importLinksInput.click();
+        });
+
+        importLinksInput.addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    try {
+                        const data = JSON.parse(e.target.result);
+                        if (data.links) {
+                            links = data.links;
+                            localStorage.setItem('videoLinks', JSON.stringify(links));
+                        }
+                        if (data.settings) {
+                            darkModeToggle.checked = data.settings.darkMode;
+                            defaultVolume.value = data.settings.defaultVolume;
+                            defaultSpeed.value = data.settings.defaultSpeed;
+                            autoplayToggle.checked = data.settings.autoplay;
+                            
+                            // Apply settings
+                            darkModeToggle.dispatchEvent(new Event('change'));
+                            defaultVolume.dispatchEvent(new Event('input'));
+                            defaultSpeed.dispatchEvent(new Event('change'));
+                            autoplayToggle.dispatchEvent(new Event('change'));
+                        }
+                        updateLinksGrid();
+                        alert('Import successful!');
+                    } catch (error) {
+                        alert('Invalid file format!');
+                    }
+                };
+                reader.readAsText(file);
+            }
+        });
+
+        resetAllBtn.addEventListener('click', () => {
+            if (confirm('Are you sure you want to reset all settings? This will not delete your links.')) {
+                localStorage.removeItem('darkMode');
+                localStorage.removeItem('defaultVolume');
+                localStorage.removeItem('defaultSpeed');
+                localStorage.removeItem('autoplay');
+                
+                // Reset to defaults
+                darkModeToggle.checked = false;
+                defaultVolume.value = 1;
+                defaultSpeed.value = 1;
+                autoplayToggle.checked = false;
+                
+                // Apply defaults
+                darkModeToggle.dispatchEvent(new Event('change'));
+                defaultVolume.dispatchEvent(new Event('input'));
+                defaultSpeed.dispatchEvent(new Event('change'));
+                autoplayToggle.dispatchEvent(new Event('change'));
+                
+                alert('All settings have been reset to defaults!');
+            }
+        });
+
+        document.getElementById('clearLinksBtn').addEventListener('click', () => {
+            if (confirm('Are you sure you want to clear all links?')) {
+                links = [];
+                localStorage.setItem('videoLinks', JSON.stringify(links));
+                updateLinksGrid();
+            }
+        });
+
+        document.getElementById('changePasswordBtn').addEventListener('click', () => {
+            const newPassword = prompt('Enter new password:');
+            if (newPassword) {
+                localStorage.setItem('adminPassword', newPassword);
+                alert('Password updated successfully!');
+            }
+        });
+
+        // Utility functions
+        function formatTime(seconds) {
+            const h = Math.floor(seconds / 3600);
+            const m = Math.floor((seconds % 3600) / 60);
+            const s = Math.floor(seconds % 60);
+            return `${pad(h)}:${pad(m)}:${pad(s)}`;
+        }
+
+        function pad(number) {
+            return number.toString().padStart(2, '0');
+        }
+
+        // Paste Link functionality
+        const pasteLink = document.getElementById('pasteLink');
+        const playNowBtn = document.getElementById('playNowBtn');
+        const currentFileInfo = document.getElementById('currentFileInfo');
+
+        playNowBtn.addEventListener('click', () => {
+            const url = pasteLink.value.trim();
+            if (url) {
+                const fileName = url.split('/').pop() || new URL(url).hostname;
+                videoPlayer.src = url;
+                
+                // Check if video exists in history
+                const historyEntry = watchHistory.find(entry => entry.url === url);
+                if (historyEntry && confirm('Resume from last watched position?')) {
+                    videoPlayer.currentTime = historyEntry.lastPosition;
+                }
+                
+                videoPlayer.play();
+                currentFileInfo.textContent = `Playing: ${fileName}`;
+                
+                // Update history
+                const now = new Date();
+                const existingIndex = watchHistory.findIndex(entry => entry.url === url);
+                const historyItem = {
+                    title: fileName,
+                    url: url,
+                    lastPosition: 0,
+                    lastPlayed: now.toISOString(),
+                    duration: 0
+                };
+                
+                if (existingIndex !== -1) {
+                    watchHistory[existingIndex] = historyItem;
+                } else {
+                    watchHistory.unshift(historyItem);
+                }
+                
+                localStorage.setItem('watchHistory', JSON.stringify(watchHistory));
+                updateHistoryGrid();
+            }
+        });
+
+        // Keyboard shortcuts
+        document.addEventListener('keydown', (e) => {
+            if (e.target.tagName === 'INPUT') return;
+
+            switch(e.code) {
+                case 'Space':
+                    e.preventDefault();
+                    if (videoPlayer.paused) {
+                        videoPlayer.play();
+                        playPauseBtn.innerHTML = '<i class="fas fa-pause"></i>';
+                    } else {
+                        videoPlayer.pause();
+                        playPauseBtn.innerHTML = '<i class="fas fa-play"></i>';
+                    }
+                    break;
+                case 'ArrowLeft':
+                    videoPlayer.currentTime -= 10;
+                    break;
+                case 'ArrowRight':
+                    videoPlayer.currentTime += 10;
+                    break;
+                case 'ArrowUp':
+                    e.preventDefault();
+                    videoPlayer.volume = Math.min(1, videoPlayer.volume + 0.1);
+                    volumeSlider.value = videoPlayer.volume;
+                    break;
+                case 'ArrowDown':
+                    e.preventDefault();
+                    videoPlayer.volume = Math.max(0, videoPlayer.volume - 0.1);
+                    volumeSlider.value = videoPlayer.volume;
+                    break;
+                case 'KeyF':
+                    if (document.fullscreenElement) {
+                        document.exitFullscreen();
+                        fullscreenBtn.innerHTML = '<i class="fas fa-expand"></i>';
+                    } else {
+                        videoPlayer.requestFullscreen();
+                        fullscreenBtn.innerHTML = '<i class="fas fa-compress"></i>';
+                    }
+                    break;
+                case 'KeyM':
+                    videoPlayer.muted = !videoPlayer.muted;
+                    volumeBtn.innerHTML = videoPlayer.muted ? 
+                        '<i class="fas fa-volume-mute"></i>' : 
+                        '<i class="fas fa-volume-up"></i>';
+                    break;
+                case 'KeyL':
+                    pasteLink.focus();
+                    break;
+            }
+        });
+
+        // Mouse wheel volume control
+        videoPlayer.addEventListener('wheel', (e) => {
+            e.preventDefault();
+            const delta = e.deltaY > 0 ? -0.1 : 0.1;
+            videoPlayer.volume = Math.max(0, Math.min(1, videoPlayer.volume + delta));
+            volumeSlider.value = videoPlayer.volume;
+        });
+
+        // Double click fullscreen
+        videoPlayer.addEventListener('dblclick', () => {
+            if (document.fullscreenElement) {
+                document.exitFullscreen();
+                fullscreenBtn.innerHTML = '<i class="fas fa-expand"></i>';
+            } else {
+                videoPlayer.requestFullscreen();
+                fullscreenBtn.innerHTML = '<i class="fas fa-compress"></i>';
+            }
+        });
+
+        // Auto-hide controls in fullscreen
+        document.addEventListener('fullscreenchange', () => {
+            isFullscreen = !!document.fullscreenElement;
+            if (isFullscreen) {
+                startControlsTimeout();
+            } else {
+                clearTimeout(controlsTimeout);
+                document.querySelector('.video-controls').style.opacity = '1';
+            }
+        });
+
+        videoPlayer.addEventListener('mousemove', () => {
+            if (isFullscreen) {
+                document.querySelector('.video-controls').style.opacity = '1';
+                startControlsTimeout();
+            }
+        });
+
+        function startControlsTimeout() {
+            clearTimeout(controlsTimeout);
+            controlsTimeout = setTimeout(() => {
+                if (isFullscreen && !videoPlayer.paused) {
+                    document.querySelector('.video-controls').style.opacity = '0';
+                }
+            }, 3000);
+        }
+
+        // Update history periodically
+        setInterval(() => {
+            if (!videoPlayer.paused && videoPlayer.src) {
+                const historyEntry = watchHistory.find(entry => entry.url === videoPlayer.src);
+                if (historyEntry) {
+                    historyEntry.lastPosition = videoPlayer.currentTime;
+                    historyEntry.duration = videoPlayer.duration;
+                    localStorage.setItem('watchHistory', JSON.stringify(watchHistory));
+                }
+            }
+        }, 5000);
+
+        // History grid management
+        function updateHistoryGrid() {
+            const historyGrid = document.getElementById('historyGrid');
+            historyGrid.innerHTML = '';
+            
+            watchHistory.forEach((entry, index) => {
+                const card = document.createElement('div');
+                card.className = 'link-card';
+                const lastPlayed = new Date(entry.lastPlayed).toLocaleString();
+                const progress = Math.round((entry.lastPosition / entry.duration) * 100) || 0;
+                
+                card.innerHTML = `
+                    <h3>${entry.title}</h3>
+                    <div class="link-preview">Last played: ${lastPlayed}</div>
+                    <div class="progress-bar" style="background: #ddd; height: 5px; border-radius: 5px; margin: 10px 0;">
+                        <div style="background: var(--primary-color); width: ${progress}%; height: 100%; border-radius: 5px;"></div>
+                    </div>
+                    <div class="card-buttons">
+                        <button class="card-btn" onclick="playFromHistory(${index}, true)">
+                            <i class="fas fa-play"></i> Resume
+                        </button>
+                        <button class="card-btn" onclick="playFromHistory(${index}, false)">
+                            <i class="fas fa-redo"></i> Restart
+                        </button>
+                        <button class="card-btn" onclick="removeFromHistory(${index})">
+                            <i class="fas fa-trash"></i>
+                        </button>
+                    </div>
+                `;
+                historyGrid.appendChild(card);
+            });
+        }
+
+        function playFromHistory(index, resume) {
+            const entry = watchHistory[index];
+            videoPlayer.src = entry.url;
+            if (resume) {
+                videoPlayer.currentTime = entry.lastPosition;
+            }
+            videoPlayer.play();
+            document.querySelector('[data-tab="player"]').click();
+        }
+
+        function removeFromHistory(index) {
+            if (confirm('Remove this item from history?')) {
+                watchHistory.splice(index, 1);
+                localStorage.setItem('watchHistory', JSON.stringify(watchHistory));
+                updateHistoryGrid();
+            }
+        }
+
+        // Watch Later functionality
+        function scheduleWatch(index) {
+            const link = links[index];
+            const scheduleInput = document.createElement('input');
+            scheduleInput.type = 'datetime-local';
+            scheduleInput.min = new Date().toISOString().slice(0, 16);
+            
+            const dialog = document.createElement('div');
+            dialog.style.position = 'fixed';
+            dialog.style.top = '50%';
+            dialog.style.left = '50%';
+            dialog.style.transform = 'translate(-50%, -50%)';
+            dialog.style.background = 'var(--card-bg)';
+            dialog.style.padding = '20px';
+            dialog.style.borderRadius = '10px';
+            dialog.style.boxShadow = 'var(--shadow)';
+            dialog.style.zIndex = '1000';
+            
+            dialog.innerHTML = `
+                <h3 style="margin-bottom: 15px;">Schedule "${link.name}" for later</h3>
+                <div style="margin-bottom: 15px;">
+                    ${scheduleInput.outerHTML}
+                </div>
+                <div style="display: flex; gap: 10px; justify-content: flex-end;">
+                    <button class="card-btn" onclick="this.parentElement.parentElement.remove()">Cancel</button>
+                    <button class="card-btn" onclick="confirmSchedule(${index}, this.parentElement.parentElement.querySelector('input').value)">Schedule</button>
+                </div>
+            `;
+            
+            document.body.appendChild(dialog);
+        }
+
+        function confirmSchedule(index, datetime) {
+            if (!datetime) {
+                alert('Please select a date and time');
+                return;
+            }
+            
+            const link = links[index];
+            const scheduledTime = new Date(datetime).getTime();
+            
+            watchLater.push({
+                name: link.name,
+                url: link.url,
+                scheduledTime: scheduledTime
+            });
+            
+            localStorage.setItem('watchLater', JSON.stringify(watchLater));
+            document.querySelector('.dialog')?.remove();
+            updateWatchlistGrid();
+            
+            // Schedule notification
+            const timeUntilPlay = scheduledTime - Date.now();
+            if (timeUntilPlay > 0) {
+                setTimeout(() => {
+                    if (Notification.permission === 'granted') {
+                        const notification = new Notification('Scheduled Video Ready', {
+                            body: `Time to watch: ${link.name}`,
+                            icon: '/favicon.ico'
+                        });
+                        
+                        notification.onclick = () => {
+                            window.focus();
+                            videoPlayer.src = link.url;
+                            videoPlayer.play();
+                            document.querySelector('[data-tab="player"]').click();
+                        };
+                    }
+                    
+                    // Auto-play if tab is active
+                    if (document.visibilityState === 'visible') {
+                        videoPlayer.src = link.url;
+                        videoPlayer.play();
+                        document.querySelector('[data-tab="player"]').click();
+                    }
+                }, timeUntilPlay);
+            }
+        }
+
+        function updateWatchlistGrid() {
+            const watchlistGrid = document.getElementById('watchlistGrid');
+            watchlistGrid.innerHTML = '';
+            
+            const now = Date.now();
+            watchLater = watchLater.filter(item => item.scheduledTime > now);
+            
+            watchLater.sort((a, b) => a.scheduledTime - b.scheduledTime).forEach((item, index) => {
+                const card = document.createElement('div');
+                card.className = 'link-card';
+                const scheduledDate = new Date(item.scheduledTime).toLocaleString();
+                
+                card.innerHTML = `
+                    <h3>${item.name}</h3>
+                    <div class="link-preview">Scheduled for: ${scheduledDate}</div>
+                    <div class="card-buttons">
+                        <button class="card-btn" onclick="playVideo(${index})">
+                            <i class="fas fa-play"></i> Play Now
+                        </button>
+                        <button class="card-btn" onclick="removeFromWatchlist(${index})">
+                            <i class="fas fa-trash"></i> Remove
+                        </button>
+                    </div>
+                `;
+                
+                watchlistGrid.appendChild(card);
+            });
+            
+            localStorage.setItem('watchLater', JSON.stringify(watchLater));
+        }
+
+        function removeFromWatchlist(index) {
+            if (confirm('Remove this item from watchlist?')) {
+                watchLater.splice(index, 1);
+                localStorage.setItem('watchLater', JSON.stringify(watchLater));
+                updateWatchlistGrid();
+            }
+        }
+
+        // Check watchlist every minute
+        setInterval(updateWatchlistGrid, 60000);
+
+        // Picture in Picture functionality
+        pipBtn.addEventListener('click', async () => {
+            try {
+                if (document.pictureInPictureElement) {
+                    await document.exitPictureInPicture();
+                } else if (document.pictureInPictureEnabled) {
+                    await videoPlayer.requestPictureInPicture();
+                }
+            } catch (error) {
+                console.error('Picture-in-Picture failed:', error);
+                alert('Picture-in-Picture mode is not supported in your browser');
+            }
+        });
+
+        videoPlayer.addEventListener('enterpictureinpicture', () => {
+            pipBtn.innerHTML = '<i class="fas fa-compress-alt"></i>';
+        });
+
+        videoPlayer.addEventListener('leavepictureinpicture', () => {
+            pipBtn.innerHTML = '<i class="fas fa-external-link-alt"></i>';
+        });
+
+        // Profile Management
+        function createProfile(name, avatar) {
+            const profile = {
+                name,
+                avatar: avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}`,
+                theme: document.body.classList.contains('dark-mode') ? 'dark' : 'light',
+                links: [],
+                history: [],
+                notes: {},
+                settings: {
+                    volume: volumeSlider.value,
+                    speed: playbackSpeed.value,
+                    autoplay: autoplayToggle.checked
+                }
+            };
+            profiles.push(profile);
+            localStorage.setItem('profiles', JSON.stringify(profiles));
+            updateProfilesList();
+            return profile;
+        }
+
+        function switchProfile(profile) {
+            if (confirm(`Switch to profile: ${profile.name}?`)) {
+                currentProfile = profile;
+                localStorage.setItem('currentProfile', profile.name);
+                applyProfileSettings(profile);
+                updateProfilesList();
+            }
+        }
+
+        function deleteProfile(index) {
+            const profile = profiles[index];
+            if (confirm(`Delete profile: ${profile.name}? This cannot be undone.`)) {
+                profiles.splice(index, 1);
+                localStorage.setItem('profiles', JSON.stringify(profiles));
+                if (currentProfile && currentProfile.name === profile.name) {
+                    currentProfile = null;
+                    localStorage.removeItem('currentProfile');
+                }
+                updateProfilesList();
+            }
+        }
+
+        function applyProfileSettings(profile) {
+            // Apply theme
+            document.body.classList.toggle('dark-mode', profile.theme === 'dark');
+            darkModeToggle.checked = profile.theme === 'dark';
+
+            // Apply settings
+            volumeSlider.value = profile.settings.volume;
+            playbackSpeed.value = profile.settings.speed;
+            autoplayToggle.checked = profile.settings.autoplay;
+
+            // Load profile data
+            links = profile.links;
+            watchHistory = profile.history;
+            videoNotes = profile.notes;
+
+            // Update UI
+            updateLinksGrid();
+            updateHistoryGrid();
+            updateNotesGrid();
+        }
+
+        function updateProfilesList() {
+            const profilesList = document.getElementById('profilesList');
+            profilesList.innerHTML = '';
+
+            profiles.forEach((profile, index) => {
+                const profileCard = document.createElement('div');
+                profileCard.className = 'profile-card';
+                profileCard.style.padding = '15px';
+                profileCard.style.background = 'var(--bg-color)';
+                profileCard.style.borderRadius = '8px';
+                profileCard.style.border = currentProfile && currentProfile.name === profile.name ? 
+                    '2px solid var(--primary-color)' : '1px solid var(--secondary-color)';
+
+                profileCard.innerHTML = `
+                    <div style="display: flex; align-items: center; margin-bottom: 10px;">
+                        <img src="${profile.avatar}" alt="${profile.name}" style="width: 40px; height: 40px; border-radius: 50%; margin-right: 10px;">
+                        <h3>${profile.name}</h3>
+                    </div>
+                    <div class="card-buttons">
+                        <button class="card-btn" onclick="switchProfile(profiles[${index}])">
+                            <i class="fas fa-user-check"></i> Switch
+                        </button>
+                        <button class="card-btn" onclick="deleteProfile(${index})">
+                            <i class="fas fa-trash"></i>
+                        </button>
+                    </div>
+                `;
+
+                profilesList.appendChild(profileCard);
+            });
+        }
+
+        document.getElementById('addProfileBtn').addEventListener('click', () => {
+            const name = document.getElementById('profileName').value.trim();
+            const avatar = document.getElementById('profileAvatar').value.trim();
+
+            if (name) {
+                if (profiles.some(p => p.name === name)) {
+                    alert('Profile name already exists!');
+                    return;
+                }
+                createProfile(name, avatar);
+                document.getElementById('profileName').value = '';
+                document.getElementById('profileAvatar').value = '';
+            } else {
+                alert('Please enter a profile name!');
+            }
+        });
+
+        // Initialize app
+        loadSavedData();
+        updateWatchlistGrid();
+        updateProfilesList();
+    </script>
+</body>
+</html>
